@@ -50,6 +50,10 @@ namespace ProjetoFace
 
         private void Camera(int idColaborador)
         {
+            // Reseta o contador de imagens
+            contadorImagem = 1;
+
+            // Captura imagens da webcam e detecta rostos
             while (true)
             {
                 var img = CaptureWebcamImage();
@@ -71,6 +75,8 @@ namespace ProjetoFace
                 }
 
                 Application.DoEvents();
+                if (contadorImagem > 20) // Captura 20 imagens e para reconhecimento
+                    break;
             }
 
         }
@@ -80,10 +86,12 @@ namespace ProjetoFace
             if (string.IsNullOrWhiteSpace(textBoxId.Text) || !int.TryParse(textBoxId.Text, out int id))
             {
                 MessageBox.Show("Informe um ID válido do colaborador.");
+                textBoxId.Focus();
                 return;
             }
 
             // Inicia a captura com o ID informado
+            button1.Enabled = false;
             captureThread = new Thread(() => Camera(id));
             captureThread.IsBackground = true;
             captureThread.Start();
@@ -114,6 +122,7 @@ namespace ProjetoFace
             string pasta = @"C:\RostosTreinamento\";
             List<Image<Gray, byte>> imagens = new List<Image<Gray, byte>>();
             List<int> ids = new List<int>();
+            btnTreinarModelo.Enabled = false;
 
             foreach (string arquivo in Directory.GetFiles(pasta, "*.jpg"))
             {
@@ -143,6 +152,7 @@ namespace ProjetoFace
                 recognizer.Write(@"C:\RostosTreinamento\modeloLBPH.yml");
 
                 MessageBox.Show("Modelo treinado com sucesso!");
+                btnTreinarModelo.Enabled = true;
             }
             else
             {
@@ -156,36 +166,53 @@ namespace ProjetoFace
             var recognizer = new LBPHFaceRecognizer();
             recognizer.Read(@"C:\RostosTreinamento\modeloLBPH.yml");
 
-            var img = CaptureWebcamImage();
-            if (img == null)
+            var startTime = DateTime.Now;
+            var recognized = false;
+
+            btnReconhecer.Enabled = false;
+
+            while ((DateTime.Now - startTime).TotalSeconds < 5 && !recognized)
             {
-                MessageBox.Show("Imagem da webcam não disponível.");
-                return;
-            }
-
-            var gray = img.Convert<Gray, byte>();
-            var faces = faceDetector.DetectMultiScale(gray, 1.1, 10, Size.Empty);
-
-            foreach (var face in faces)
-            {
-                var faceImage = gray.Copy(face).Resize(100, 100, Emgu.CV.CvEnum.Inter.Cubic);
-                var result = recognizer.Predict(faceImage);
-
-                if (result.Label != -1 && result.Distance < 80) // Ajuste o threshold conforme necessário
+                var img = CaptureWebcamImage();
+                if (img == null)
                 {
-                    textBoxId.Text = result.Label.ToString();
-                    labelStatus.Text = $"Reconhecido: ID {result.Label} (Confiança: {result.Distance:F2})";
-                }
-                else
-                {
-                    labelStatus.Text = "Rosto não reconhecido.";
+                    labelStatus.Text = "Imagem da webcam não disponível.";
+                    Application.DoEvents();
+                    continue;
                 }
 
-                img.Draw(face, new Bgr(Color.Green), 2);
+                var gray = img.Convert<Gray, byte>();
+                var faces = faceDetector.DetectMultiScale(gray, 1.1, 10, Size.Empty);
+
+                foreach (var face in faces)
+                {
+                    var faceImage = gray.Copy(face).Resize(100, 100, Emgu.CV.CvEnum.Inter.Cubic);
+                    var result = recognizer.Predict(faceImage);
+
+                    if (result.Label != -1 && result.Distance < 80) // Ajuste o threshold conforme necessário
+                    {
+                        textBoxId.Text = result.Label.ToString();
+                        labelStatus.Text = $"Reconhecido: ID {result.Label} (Confiança: {result.Distance:F2})";
+                        recognized = true;
+                    }
+                    else
+                    {
+                        labelStatus.Text = "Rosto não reconhecido.";
+                    }
+
+                    img.Draw(face, new Bgr(Color.Green), 2);
+                }
+
+                pictureBox1.Image = img.ToBitmap();
+                Application.DoEvents();
             }
 
-            pictureBox1.Image = img.ToBitmap();
+            if (!recognized)
+            {
+                labelStatus.Text = "Nenhum rosto reconhecido em 5 segundos.";
+            }
 
+            btnReconhecer.Enabled = true;
         }
     }
 
