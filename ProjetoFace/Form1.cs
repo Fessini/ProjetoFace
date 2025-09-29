@@ -76,7 +76,11 @@ namespace ProjetoFace
 
                 Application.DoEvents();
                 if (contadorImagem > 20) // Captura 20 imagens e para reconhecimento
-                    break;
+                { 
+                    MessageBox.Show("Captura concluída.");
+                    break; 
+                }
+                
             }
 
         }
